@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🔨 Компиляция Movia для Apple Silicon (Release arm64)..."
+echo "Компиляция Movia для Apple Silicon (Release arm64)..."
 cd "$(dirname "$0")/.."
 
 swift build -c release --arch arm64
@@ -12,7 +12,7 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
-echo "📦 Создание бандла $APP_DIR..."
+echo "Создание бандла $APP_DIR..."
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
@@ -28,8 +28,14 @@ if [ -f "Resources/AppIcon.icns" ]; then
     cp Resources/AppIcon.icns "$RESOURCES_DIR/AppIcon.icns"
 fi
 
+# Скопировать нейросетевые модели CoreML
+if [ -d "Resources/Models" ]; then
+    echo "Копирование моделей нейросетей CoreML в бандл..."
+    cp -R Resources/Models "$RESOURCES_DIR/"
+fi
+
 # Подписать бандл ad-hoc
-echo "🔏 Подпись приложения..."
+echo "Подпись приложения..."
 codesign --force --deep --sign - "$APP_DIR"
 
-echo "✅ Приложение $APP_NAME.app успешно собрано в: $APP_DIR"
+echo "Приложение $APP_NAME.app успешно собрано в: $APP_DIR"

@@ -38,7 +38,7 @@ public struct AboutView: View {
             }
             
             VStack(spacing: 6) {
-                Text("Версия 1.0.0")
+                Text("Версия 1.1.0")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(FCPTheme.textPrimary)
                 
@@ -61,6 +61,6 @@ public struct AboutView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(FCPTheme.windowBackground)
+        .themedFloatingIsland(theme: appState.uiTheme, cornerRadius: appState.uiTheme == .liquidGlass ? 16 : 0)
     }
 }

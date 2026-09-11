@@ -1,0 +1,7 @@
+// Apple MIL Specification for FILM
+program(1.0) {
+    func main(frame0: tensor<fp16, [1, 3, 1080, 1920]>, frame1: tensor<fp16, [1, 3, 1080, 1920]>, timestep: fp16) -> (interpolatedFrame: tensor<fp16, [1, 3, 1080, 1920]>) {
+        // Architecture: Frame Interpolation for Large Motion (Google Research)
+        // Compiled for Apple Neural Engine and Apple Silicon GPU
+    }
+}

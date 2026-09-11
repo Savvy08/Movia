@@ -5,9 +5,20 @@ import AVFoundation
 
 @MainActor
 public final class AppState: ObservableObject {
-    // Navigation
+    // Navigation & UI Theme
     @Published public var currentTab: NavTab = .home
     @Published public var selectedSidebarItem: SidebarItem = .project
+    @Published public var uiTheme: AppUITheme = {
+        if let saved = UserDefaults.standard.string(forKey: "movia_ui_theme"),
+           let theme = AppUITheme(rawValue: saved) {
+            return theme
+        }
+        return .liquidGlass
+    }() {
+        didSet {
+            UserDefaults.standard.set(uiTheme.rawValue, forKey: "movia_ui_theme")
+        }
+    }
     
     // Video Queue
     @Published public var queue: [VideoItem] = []
@@ -30,7 +41,12 @@ public final class AppState: ObservableObject {
     @Published public var speedPreset: SlowdownPreset = .custom
     @Published public var customSpeed: Double = 4.0 // 1.5x ... 16x
     @Published public var targetFps: TargetFPS = .fps60
+    @Published public var isMotionBlurEnabled: Bool = false
     @Published public var motionBlur: Double = 0.5 // 0.0 to 1.0 (Off to High)
+    
+    public var effectiveMotionBlur: Double {
+        isMotionBlurEnabled ? motionBlur : 0.0
+    }
     
     // Timeline Segment (In / Out)
     @Published public var trimStart: Double = 0.0
@@ -45,6 +61,8 @@ public final class AppState: ObservableObject {
     @Published public var previewQuality: PreviewQuality = .draft720p
     
     // Quality & Hardware Engine
+    @Published public var slowmoEngine: SlowmoEngine = .fast
+    @Published public var exportResolution: ExportResolution = .original
     @Published public var processingQuality: ProcessingQuality = .balanced
     @Published public var memoryLimit: MemoryLimitOption = .mb300
     @Published public var exportFormat: ExportFormat = .proRes422HQ
@@ -57,6 +75,43 @@ public final class AppState: ObservableObject {
     @Published public var progress: Double = 0.0
     @Published public var statusMessage: String = "Готов к обработке"
     
+    // Storage & Export Defaults
+    @Published public var useDefaultExportFolder: Bool = {
+        UserDefaults.standard.bool(forKey: "movia_use_default_export_folder")
+    }() {
+        didSet {
+            UserDefaults.standard.set(useDefaultExportFolder, forKey: "movia_use_default_export_folder")
+        }
+    }
+    
+    @Published public var defaultExportPath: String = {
+        if let saved = UserDefaults.standard.string(forKey: "movia_default_export_path"), !saved.isEmpty {
+            return saved
+        }
+        let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first?.path
+        return movies ?? NSHomeDirectory()
+    }() {
+        didSet {
+            UserDefaults.standard.set(defaultExportPath, forKey: "movia_default_export_path")
+        }
+    }
+    
+    // Cache Management
+    @Published public var customCachePath: String = {
+        if let saved = UserDefaults.standard.string(forKey: "movia_custom_cache_path"), !saved.isEmpty {
+            return saved
+        }
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("Movia", isDirectory: true).path
+        return caches ?? NSTemporaryDirectory()
+    }() {
+        didSet {
+            UserDefaults.standard.set(customCachePath, forKey: "movia_custom_cache_path")
+            updateCacheSize()
+        }
+    }
+    
+    @Published public var cacheSizeBytesString: String = "0 МБ"
+    
     // History & Presets
     @Published public var history: [HistoryItem] = []
     @Published public var customPresets: [SlowMoPreset] = []
@@ -64,9 +119,163 @@ public final class AppState: ObservableObject {
     // Thermal & Hardware monitor
     @ObservedObject public var thermalMonitor = ThermalMonitor.shared
     
+    // Keyboard monitor for Global / Timeline Shortcuts
+    private var keyEventMonitor: Any?
+    
     public init() {
         loadHistory()
         loadPresets()
+        updateCacheSize()
+        setupKeyboardMonitor()
+    }
+    
+    deinit {
+        if let monitor = keyEventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
+    
+    private func setupKeyboardMonitor() {
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            
+            // If user is currently typing in an input field (NSTextView / NSTextField), do not steal the keystroke
+            if let responder = NSApp.keyWindow?.firstResponder {
+                if responder is NSTextView || responder is NSTextField {
+                    return event
+                }
+            }
+            
+            // Only handle shortcuts when an item is active
+            guard self.activeItem != nil else { return event }
+            
+            let isPlain = !event.modifierFlags.contains(.command) && 
+                          !event.modifierFlags.contains(.control) && 
+                          !event.modifierFlags.contains(.option)
+            
+            if isPlain {
+                let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+                
+                // 1. Spacebar: Play / Pause (keyCode 49 or char " ")
+                if event.keyCode == 49 || chars == " " {
+                    self.togglePlayPause()
+                    return nil
+                }
+                
+                // 2. In-Point: [ (US) or 'х' (RU) (keyCode 33 is LeftBracket, or chars)
+                if event.keyCode == 33 || chars == "[" || chars == "х" {
+                    self.setInAtCurrentTime()
+                    return nil
+                }
+                
+                // 3. Out-Point: ] (US) or 'ъ' (RU) (keyCode 30 is RightBracket, or chars)
+                if event.keyCode == 30 || chars == "]" || chars == "ъ" {
+                    self.setOutAtCurrentTime()
+                    return nil
+                }
+                
+                // 4. Left Arrow: step 1 frame backward (keyCode 123)
+                if event.keyCode == 123 {
+                    self.stepFrame(forward: false)
+                    return nil
+                }
+                
+                // 5. Right Arrow: step 1 frame forward (keyCode 124)
+                if event.keyCode == 124 {
+                    self.stepFrame(forward: true)
+                    return nil
+                }
+                
+                // 6. Up Arrow: jump to In-point (keyCode 126)
+                if event.keyCode == 126 {
+                    self.seek(to: self.trimStart)
+                    return nil
+                }
+                
+                // 7. Down Arrow: jump to Out-point (keyCode 125)
+                if event.keyCode == 125 {
+                    self.seek(to: self.trimEnd)
+                    return nil
+                }
+            }
+            
+            return event
+        }
+    }
+    
+    // MARK: - Export and Cache Folder Pickers
+    public func selectDefaultExportFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.message = "Выберите папку для сохранения готовых видеороликов"
+        
+        if panel.runModal() == .OK, let selectedURL = panel.url {
+            self.defaultExportPath = selectedURL.path
+        }
+    }
+    
+    public func selectCustomCacheFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.message = "Выберите папку для временных файлов и кэша Movia"
+        
+        if panel.runModal() == .OK, let selectedURL = panel.url {
+            self.customCachePath = selectedURL.path
+        }
+    }
+    
+    public func clearCache() {
+        let path = customCachePath
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fm = FileManager.default
+            if let files = try? fm.contentsOfDirectory(atPath: path) {
+                for file in files {
+                    let fullPath = (path as NSString).appendingPathComponent(file)
+                    try? fm.removeItem(atPath: fullPath)
+                }
+            }
+            // Also clean system temp files from Movia
+            let tempDir = NSTemporaryDirectory()
+            if let tempFiles = try? fm.contentsOfDirectory(atPath: tempDir) {
+                for f in tempFiles where f.contains("movia") || f.contains("SlowMo") {
+                    try? fm.removeItem(atPath: (tempDir as NSString).appendingPathComponent(f))
+                }
+            }
+            Task { @MainActor [weak self] in
+                self?.updateCacheSize()
+            }
+        }
+    }
+    
+    public func updateCacheSize() {
+        let path = customCachePath
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            var totalBytes: Int64 = 0
+            if let enumerator = fm.enumerator(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) {
+                for case let fileURL as URL in enumerator {
+                    if let res = try? fileURL.resourceValues(forKeys: [.fileSizeKey]), let size = res.fileSize {
+                        totalBytes += Int64(size)
+                    }
+                }
+            }
+            let mb = Double(totalBytes) / (1024.0 * 1024.0)
+            let formatted: String
+            if mb >= 1024.0 {
+                formatted = String(format: "%.1f ГБ", mb / 1024.0)
+            } else {
+                formatted = String(format: "%.0f МБ", mb)
+            }
+            Task { @MainActor [weak self] in
+                self?.cacheSizeBytesString = formatted
+            }
+        }
     }
     
     // MARK: - Video Import
@@ -169,10 +378,11 @@ public final class AppState: ObservableObject {
     }
     
     private func loadPlayerItem(url: URL) {
-        let playerItem = AVPlayerItem(url: url)
+        let asset = AVURLAsset(url: url)
+        let playerItem = AVPlayerItem(asset: asset)
         playerItem.audioTimePitchAlgorithm = .timeDomain
         self.player.replaceCurrentItem(with: playerItem)
-        self.player.actionAtItemEnd = .pause
+        self.player.actionAtItemEnd = .none
         self.isPlaying = false
     }
     
@@ -184,22 +394,18 @@ public final class AppState: ObservableObject {
         player.pause()
         
         if mode == .processed, let processed = processedURL {
-            // Load the actual rendered zero-flicker file
+            // Load the actual rendered slow motion file
             loadPlayerItem(url: processed)
-            totalDuration = item.duration * currentEffectiveSpeed
+            totalDuration = max(0.1, item.duration * currentEffectiveSpeed)
             seek(to: currentTime * currentEffectiveSpeed)
         } else {
             // Load the original item
             loadPlayerItem(url: item.url)
             totalDuration = item.duration
             seek(to: currentTime)
-            if mode == .processed {
-                // Live proxy rate
-                player.rate = Float(1.0 / max(1.0, currentEffectiveSpeed))
-            } else {
-                player.rate = 1.0
-            }
         }
+        
+        updatePlaybackRate()
         
         if wasPlaying {
             togglePlayPause()
@@ -232,25 +438,28 @@ public final class AppState: ObservableObject {
             player.pause()
             isPlaying = false
         } else {
-            if currentTime >= trimEnd && trimEnd > trimStart {
+            if (trimEnd > trimStart && currentTime >= trimEnd) || (totalDuration > 0 && currentTime >= totalDuration - 0.05) {
                 seek(to: trimStart)
             }
-            updatePlaybackRate()
             isPlaying = true
+            updatePlaybackRate()
         }
     }
     
     public func updatePlaybackRate() {
         guard player.currentItem != nil else { return }
         
-        // If playing processed file, normal rate 1.0
-        if previewMode == .processed && processedURL != nil {
-            player.rate = 1.0
-        } else if previewMode == .processed || previewMode == .sideBySide {
-            let speed = Float(1.0 / max(1.0, currentEffectiveSpeed))
-            player.rate = speed
+        if isPlaying {
+            if previewMode == .processed && processedURL != nil {
+                player.rate = 1.0
+            } else if previewMode == .processed {
+                let speed = Float(1.0 / max(1.0, currentEffectiveSpeed))
+                player.rate = speed
+            } else {
+                player.rate = 1.0
+            }
         } else {
-            player.rate = 1.0
+            player.rate = 0.0
         }
     }
     
@@ -265,17 +474,106 @@ public final class AppState: ObservableObject {
         seek(to: currentTime + seconds)
     }
     
+    public func stepFrame(forward: Bool) {
+        let fps = activeItem?.sourceFps ?? 30.0
+        let frameDuration = 1.0 / max(1.0, fps)
+        let delta = forward ? frameDuration : -frameDuration
+        seek(to: currentTime + delta)
+    }
+    
+    // MARK: - Final Cut Pro Style Skimming (Instant Muted Scrubbing)
+    @Published public var isSkimming: Bool = false
+    @Published public var skimTime: Double? = nil
+    private var wasMutedBeforeSkim: Bool = false
+    
+    public func performSkim(to seconds: Double) {
+        guard activeItem != nil else { return }
+        if !isSkimming {
+            isSkimming = true
+            wasMutedBeforeSkim = player.isMuted
+            player.isMuted = true
+        }
+        skimTime = seconds
+        let clamped = max(0.0, min(totalDuration, seconds))
+        let target = CMTime(seconds: clamped, preferredTimescale: 600)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        currentTime = clamped
+    }
+    
+    public func endSkim() {
+        if isSkimming {
+            isSkimming = false
+            skimTime = nil
+            player.isMuted = wasMutedBeforeSkim
+        }
+    }
+    
     // MARK: - Actions
+    public static func uniqueDestinationURL(for destination: URL) -> URL {
+        guard FileManager.default.fileExists(atPath: destination.path) else {
+            return destination
+        }
+        let folder = destination.deletingLastPathComponent()
+        let fullBase = destination.deletingPathExtension().lastPathComponent
+        let ext = destination.pathExtension
+        
+        var rootName = fullBase
+        var startIndex = 1
+        
+        // If filename already has a trailing number like "video 1", extract base and number
+        if let match = fullBase.range(of: #"^(.*?)\s+(\d+)$"#, options: .regularExpression) {
+            let matchString = String(fullBase[match])
+            let parts = matchString.split(separator: " ")
+            if parts.count >= 2, let lastNum = Int(parts.last!) {
+                rootName = parts.dropLast().joined(separator: " ")
+                startIndex = lastNum + 1
+            }
+        }
+        
+        var counter = startIndex
+        var candidateURL = destination
+        while FileManager.default.fileExists(atPath: candidateURL.path) {
+            let newFilename = ext.isEmpty ? "\(rootName) \(counter)" : "\(rootName) \(counter).\(ext)"
+            candidateURL = folder.appendingPathComponent(newFilename)
+            counter += 1
+        }
+        return candidateURL
+    }
+    
     public func startProcessing() {
         guard let item = activeItem else { return }
         
+        let baseFilename = "\(item.url.deletingPathExtension().lastPathComponent)_SlowMo_\(Int(currentEffectiveSpeed))x.\(exportFormat.fileExtension)"
+        
+        if useDefaultExportFolder && !defaultExportPath.isEmpty {
+            let folderURL = URL(fileURLWithPath: defaultExportPath)
+            try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            let baseDestination = folderURL.appendingPathComponent(baseFilename)
+            let uniqueDestination = AppState.uniqueDestinationURL(for: baseDestination)
+            self.executeExport(for: item, to: uniqueDestination)
+            return
+        }
+        
+        let defaultFolder = item.url.deletingLastPathComponent()
+        let initialCandidate = defaultFolder.appendingPathComponent(baseFilename)
+        let uniqueName = AppState.uniqueDestinationURL(for: initialCandidate).lastPathComponent
+        
         let savePanel = NSSavePanel()
-        savePanel.nameFieldStringValue = "\(item.url.deletingPathExtension().lastPathComponent)_SlowMo_\(Int(currentEffectiveSpeed))x.\(exportFormat.fileExtension)"
+        savePanel.directoryURL = defaultFolder
+        savePanel.nameFieldStringValue = uniqueName
         savePanel.message = "Куда сохранить обработанное видео?"
         savePanel.canCreateDirectories = true
         
-        if savePanel.runModal() == .OK, let destination = savePanel.url {
-            executeExport(for: item, to: destination)
+        DispatchQueue.main.async {
+            if let keyWin = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first(where: { $0.isVisible }) {
+                savePanel.beginSheetModal(for: keyWin) { response in
+                    if response == .OK, let destination = savePanel.url {
+                        self.executeExport(for: item, to: destination)
+                    }
+                }
+            } else if savePanel.runModal() == .OK, let destination = savePanel.url {
+                self.executeExport(for: item, to: destination)
+            }
         }
     }
     
@@ -283,7 +581,8 @@ public final class AppState: ObservableObject {
         speedPreset == .custom ? customSpeed : speedPreset.factor
     }
     
-    private func executeExport(for item: VideoItem, to destinationURL: URL) {
+    private func executeExport(for item: VideoItem, to requestedDestinationURL: URL) {
+        let destinationURL = AppState.uniqueDestinationURL(for: requestedDestinationURL)
         isProcessing = true
         isPaused = false
         progress = 0.0
@@ -293,6 +592,8 @@ public final class AppState: ObservableObject {
         exportItem.trimStart = self.trimStart
         exportItem.trimEnd = self.trimEnd
         let segmentOnly = self.isSegmentOnlyExport
+        let engine = self.slowmoEngine
+        let resolution = self.exportResolution
         
         Task {
             do {
@@ -300,10 +601,12 @@ public final class AppState: ObservableObject {
                     item: exportItem,
                     speedFactor: currentEffectiveSpeed,
                     targetFps: targetFps.rawValue,
-                    motionBlur: motionBlur,
+                    motionBlur: effectiveMotionBlur,
                     quality: processingQuality,
                     format: exportFormat,
                     memoryLimitMB: memoryLimit.megabytes,
+                    engine: engine,
+                    resolution: resolution,
                     isSegmentOnly: segmentOnly,
                     outputURL: destinationURL
                 ) { [weak self] currentProg, status in
@@ -318,8 +621,16 @@ public final class AppState: ObservableObject {
                     self.processedURL = destinationURL
                     self.recordHistory(item: item, outputURL: destinationURL)
                     
-                    // Switch to Processed preview automatically to see the result
-                    self.switchPreviewMode(to: .processed)
+                    // Enforce pause so playhead never moves by itself after export
+                    self.isPlaying = false
+                    self.player.pause()
+                    self.player.rate = 0.0
+                    
+                    self.previewMode = .processed
+                    self.loadPlayerItem(url: destinationURL)
+                    self.totalDuration = max(0.1, item.duration * self.currentEffectiveSpeed)
+                    self.seek(to: 0.0)
+                    self.updatePlaybackRate()
                 }
             } catch {
                 await MainActor.run {

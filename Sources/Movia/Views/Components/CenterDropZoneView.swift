@@ -20,7 +20,7 @@ public struct CenterDropZoneView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(FCPTheme.windowBackground)
+        .themedFloatingIsland(theme: appState.uiTheme, cornerRadius: appState.uiTheme == .liquidGlass ? 16 : 0)
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
             return true
@@ -99,33 +99,32 @@ public struct CenterDropZoneView: View {
     // MARK: - State 2: Large Central Player + Timeline
     private func activePlayerWorkspace(item: VideoItem) -> some View {
         VStack(spacing: 12) {
-            // Main Big Video Player Canvas
+            // Main Big Video Player Canvas (Floating Glass Island)
             ZStack(alignment: .bottom) {
                 ZStack(alignment: .top) {
                     // Video Surface
                     VideoPlayerCanvasView(player: appState.player)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: appState.uiTheme == .liquidGlass ? 16 : 10))
                         .background(Color.black)
                     
-                    // Top Bar overlay inside player
+                    // Top Bar overlay inside player (Floating Glass Header)
                     HStack {
                         // File tag
                         HStack(spacing: 6) {
                             Image(systemName: "film")
                                 .font(.system(size: 11))
                             Text(item.name)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.black.opacity(0.65))
-                        .cornerRadius(6)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .themedCard(theme: appState.uiTheme, cornerRadius: 8)
                         
                         Spacer()
                         
                         // Mode Switcher: Original | Processed | Side by Side
-                        HStack(spacing: 2) {
+                        HStack(spacing: 4) {
                             ForEach(PreviewMode.allCases) { mode in
                                 let isSel = appState.previewMode == mode
                                 Button(action: {
@@ -134,81 +133,20 @@ public struct CenterDropZoneView: View {
                                     Text(mode.rawValue)
                                         .font(.system(size: 11, weight: isSel ? .semibold : .regular))
                                         .foregroundColor(isSel ? .white : FCPTheme.textSecondary)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 5)
-                                                .fill(isSel ? FCPTheme.accentBlue : Color.clear)
-                                        )
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 5)
+                                        .themedCard(theme: appState.uiTheme, cornerRadius: 6, isHighlighted: isSel)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                         .padding(3)
-                        .background(Color.black.opacity(0.65))
-                        .cornerRadius(7)
+                        .themedPanel(theme: appState.uiTheme, cornerRadius: 9)
                     }
-                    .padding(12)
-                    
-                    // Side-by-side split visual overlay
-                    if appState.previewMode == .sideBySide {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                // "До" (Before) label on left
-                                HStack {
-                                    Text("До (Оригинал)")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.black.opacity(0.7))
-                                        .cornerRadius(4)
-                                        .padding(12)
-                                        .padding(.top, 40)
-                                    
-                                    Spacer()
-                                    
-                                    Text(String(format: "После (SlowMo %.1fx)", appState.currentEffectiveSpeed))
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(FCPTheme.accentBlue.opacity(0.85))
-                                        .cornerRadius(4)
-                                        .padding(12)
-                                        .padding(.top, 40)
-                                }
-                                
-                                // Vertical Split Line with Draggable Handle
-                                ZStack {
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.9))
-                                        .frame(width: 2)
-                                    
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 20, height: 20)
-                                        .shadow(color: Color.black.opacity(0.5), radius: 4)
-                                        .overlay(
-                                            Image(systemName: "arrow.left.and.right")
-                                                .font(.system(size: 9, weight: .bold))
-                                                .foregroundColor(Color.black)
-                                        )
-                                }
-                                .offset(x: geo.size.width * appState.splitPosition - 1)
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { val in
-                                            let ratio = val.location.x / geo.size.width
-                                            appState.splitPosition = max(0.05, min(0.95, ratio))
-                                        }
-                                )
-                            }
-                        }
-                    }
+                    .padding(14)
                 }
                 
-                // Bottom Player Controls Bar
+                // Bottom Player Controls Bar (Floating Glass Capsule)
                 HStack(spacing: 14) {
                     // Skip to In-point
                     Button(action: {
@@ -220,18 +158,23 @@ public struct CenterDropZoneView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    // Big Play / Pause
+                    // Big Play / Pause (Glass neon circle)
                     Button(action: {
                         appState.togglePlayPause()
                     }) {
                         Image(systemName: appState.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.white)
-                            .frame(width: 32, height: 32)
-                            .background(FCPTheme.accentBlue)
-                            .clipShape(Circle())
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(FCPTheme.accent(for: appState.uiTheme))
+                                    .shadow(color: FCPTheme.accent(for: appState.uiTheme).opacity(0.5), radius: 8)
+                            )
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.space, modifiers: [])
+                    .help("Воспроизведение / Пауза (Пробел)")
                     
                     // Skip to Out-point
                     Button(action: {
@@ -245,7 +188,7 @@ public struct CenterDropZoneView: View {
                     
                     // Timecode
                     Text(formatTime(appState.currentTime))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundColor(FCPTheme.textPrimary)
                     
                     // Interactive Scrubber
@@ -255,17 +198,25 @@ public struct CenterDropZoneView: View {
                         
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.white.opacity(0.2))
-                                .frame(height: 4)
+                                .fill(Color.white.opacity(0.18))
+                                .frame(height: 5)
                             
                             Capsule()
-                                .fill(FCPTheme.accentBlue)
-                                .frame(width: scrubberGeo.size.width * CGFloat(progressRatio), height: 4)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [FCPTheme.accent(for: appState.uiTheme), FCPTheme.accent(for: appState.uiTheme).opacity(0.7)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: scrubberGeo.size.width * CGFloat(progressRatio), height: 5)
+                                .shadow(color: FCPTheme.accent(for: appState.uiTheme).opacity(0.5), radius: 4)
                             
                             Circle()
                                 .fill(Color.white)
-                                .frame(width: 12, height: 12)
-                                .offset(x: scrubberGeo.size.width * CGFloat(progressRatio) - 6)
+                                .frame(width: 14, height: 14)
+                                .shadow(color: Color.black.opacity(0.4), radius: 3)
+                                .offset(x: scrubberGeo.size.width * CGFloat(progressRatio) - 7)
                         }
                         .frame(maxHeight: .infinity)
                         .contentShape(Rectangle())
@@ -281,39 +232,41 @@ public struct CenterDropZoneView: View {
                     
                     // Total Duration
                     Text(formatTime(appState.totalDuration))
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundColor(FCPTheme.textSecondary)
                     
                     // Quick Replace button
                     Button(action: {
                         appState.openFilePicker()
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .font(.system(size: 10))
                             Text("Заменить")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 11, weight: .semibold))
                         }
                         .foregroundColor(FCPTheme.textSecondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(5)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .themedCard(theme: appState.uiTheme, cornerRadius: 6)
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.75))
-                .cornerRadius(8)
-                .padding(12)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .themedPanel(theme: appState.uiTheme, cornerRadius: 14)
+                .padding(14)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .cornerRadius(10)
+            .clipShape(RoundedRectangle(cornerRadius: appState.uiTheme == .liquidGlass ? 16 : 10))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isTargeted ? FCPTheme.accentBlue : FCPTheme.border, lineWidth: isTargeted ? 2 : 1)
+                RoundedRectangle(cornerRadius: appState.uiTheme == .liquidGlass ? 16 : 10)
+                    .stroke(
+                        isTargeted ? FCPTheme.accent(for: appState.uiTheme) : FCPTheme.borderColor(for: appState.uiTheme),
+                        lineWidth: isTargeted ? 2 : 1
+                    )
             )
+            .shadow(color: Color.black.opacity(appState.uiTheme == .liquidGlass ? 0.35 : 0.2), radius: 16, y: 8)
             
             // Precision Timeline View (Zoom, Filmstrip, Timecodes, Cut, In/Out)
             PrecisionTimelineView(appState: appState, item: item)

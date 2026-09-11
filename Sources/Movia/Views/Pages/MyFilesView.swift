@@ -235,6 +235,7 @@ public struct MyFilesView: View {
             }
             .padding(20)
         }
+        .themedFloatingIsland(theme: appState.uiTheme, cornerRadius: appState.uiTheme == .liquidGlass ? 16 : 0)
     }
     
     private func formatDuration(_ seconds: Double) -> String {

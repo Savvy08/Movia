@@ -3,6 +3,7 @@ import SwiftUI
 public struct PrecisionTimelineView: View {
     @ObservedObject var appState: AppState
     let item: VideoItem
+    @State private var dragSegmentInitialStart: Double? = nil
     
     public init(appState: AppState, item: VideoItem) {
         self.appState = appState
@@ -27,11 +28,11 @@ public struct PrecisionTimelineView: View {
         .frame(height: 154)
         .fixedSize(horizontal: false, vertical: true)
         .background(
-            RoundedRectangle(cornerRadius: FCPTheme.radiusCard)
-                .fill(FCPTheme.cardBackground.opacity(0.85))
+            RoundedRectangle(cornerRadius: FCPTheme.cardRadius(for: appState.uiTheme))
+                .fill(appState.uiTheme == .liquidGlass ? FCPTheme.liquidCardBackground : FCPTheme.cardBackground.opacity(0.85))
                 .overlay(
-                    RoundedRectangle(cornerRadius: FCPTheme.radiusCard)
-                        .stroke(FCPTheme.border, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: FCPTheme.cardRadius(for: appState.uiTheme))
+                        .stroke(FCPTheme.borderColor(for: appState.uiTheme), lineWidth: 1)
                 )
         )
     }
@@ -39,72 +40,58 @@ public struct PrecisionTimelineView: View {
     // MARK: - 1. Header Toolbar
     private var headerToolbar: some View {
         HStack(spacing: 12) {
-            // Quick In / Out / Cut Buttons
+            // Quick In / Out / Cut / Reset Buttons
             HStack(spacing: 6) {
+                // In-Point Button (Icon only)
                 Button(action: {
                     appState.setInAtCurrentTime()
                 }) {
-                    Text("[ In")
+                    Image(systemName: "arrow.right.to.line")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(FCPTheme.textPrimary)
-                        .lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .frame(height: 26)
-                        .background(FCPTheme.panelBackground)
-                        .cornerRadius(5)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .stroke(FCPTheme.border, lineWidth: 1)
-                        )
+                        .frame(width: 26, height: 26)
+                        .themedCard(theme: appState.uiTheme, cornerRadius: 6)
                 }
                 .buttonStyle(.plain)
-                .fixedSize()
-                .help("Установить точку In по положению плейхеда")
+                .keyboardShortcut("i", modifiers: [])
+                .help("Установить точку In (I или [ / Х)")
                 
+                // Out-Point Button (Icon only)
                 Button(action: {
                     appState.setOutAtCurrentTime()
                 }) {
-                    Text("Out ]")
+                    Image(systemName: "arrow.left.to.line")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(FCPTheme.textPrimary)
-                        .lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .frame(height: 26)
-                        .background(FCPTheme.panelBackground)
-                        .cornerRadius(5)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .stroke(FCPTheme.border, lineWidth: 1)
-                        )
+                        .frame(width: 26, height: 26)
+                        .themedCard(theme: appState.uiTheme, cornerRadius: 6)
                 }
                 .buttonStyle(.plain)
-                .fixedSize()
-                .help("Установить точку Out по положению плейхеда")
+                .keyboardShortcut("o", modifiers: [])
+                .help("Установить точку Out (O или ] / Ъ)")
                 
-                // Scissors / Split Button
+                // Secondary hidden buttons to register [ and ] shortcuts with SwiftUI
+                Button("") { appState.setInAtCurrentTime() }
+                    .keyboardShortcut("[", modifiers: [])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                Button("") { appState.setOutAtCurrentTime() }
+                    .keyboardShortcut("]", modifiers: [])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                
+                // Scissors / Split Button (Icon only)
                 Button(action: {
                     appState.splitAtCurrentTime()
                 }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "scissors")
-                            .font(.system(size: 10))
-                        Text("Обрезать")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(FCPTheme.textPrimary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 8)
-                    .frame(height: 26)
-                    .background(FCPTheme.panelBackground)
-                    .cornerRadius(5)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(FCPTheme.border, lineWidth: 1)
-                    )
+                    Image(systemName: "scissors")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(FCPTheme.textPrimary)
+                        .frame(width: 26, height: 26)
+                        .themedCard(theme: appState.uiTheme, cornerRadius: 6)
                 }
                 .buttonStyle(.plain)
-                .fixedSize()
-                .help("Обрезать по плейхеду")
+                .help("Обрезать по плейхеду (B / ⌘B)")
                 
                 // Reset Button
                 Button(action: {
@@ -114,16 +101,10 @@ public struct PrecisionTimelineView: View {
                         .font(.system(size: 10))
                         .foregroundColor(FCPTheme.textMuted)
                         .frame(width: 26, height: 26)
-                        .background(FCPTheme.panelBackground)
-                        .cornerRadius(5)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .stroke(FCPTheme.border, lineWidth: 1)
-                        )
+                        .themedCard(theme: appState.uiTheme, cornerRadius: 6)
                 }
                 .buttonStyle(.plain)
-                .fixedSize()
-                .help("Сбросить диапазон на всю длину")
+                .help("Сбросить диапазон на всю длину (⌥X)")
             }
             
             Spacer()
@@ -133,6 +114,7 @@ public struct PrecisionTimelineView: View {
                 PrecisionTimecodeField(
                     label: "In:",
                     seconds: appState.trimStart,
+                    theme: appState.uiTheme,
                     onCommit: { newSec in
                         let clamped = max(0.0, min(appState.trimEnd - 0.05, newSec))
                         appState.trimStart = clamped
@@ -148,6 +130,7 @@ public struct PrecisionTimelineView: View {
                 PrecisionTimecodeField(
                     label: "Out:",
                     seconds: appState.trimEnd,
+                    theme: appState.uiTheme,
                     onCommit: { newSec in
                         let clamped = max(appState.trimStart + 0.05, min(item.duration, newSec))
                         appState.trimEnd = clamped
@@ -163,6 +146,7 @@ public struct PrecisionTimelineView: View {
                 PrecisionTimecodeField(
                     label: "Длит:",
                     seconds: max(0.0, appState.trimEnd - appState.trimStart),
+                    theme: appState.uiTheme,
                     onCommit: { newDur in
                         guard newDur > 0.02 else { return }
                         let targetEnd = appState.trimStart + newDur
@@ -202,7 +186,7 @@ public struct PrecisionTimelineView: View {
                 .buttonStyle(.plain)
                 
                 Slider(value: $appState.timelineZoom, in: 1.0...8.0, step: 0.5)
-                    .accentColor(FCPTheme.accentBlue)
+                    .accentColor(FCPTheme.accent(for: appState.uiTheme))
                     .frame(width: 80)
                 
                 Button(action: {
@@ -237,101 +221,123 @@ public struct PrecisionTimelineView: View {
                         // A. Detailed Ruler with Dynamically-Spaced Sub-Second Ticks
                         rulerView(width: trackWidth, duration: duration)
                             .frame(height: 18)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
+                                    .onChanged { val in
+                                        let ratio = max(0.0, min(1.0, val.location.x / trackWidth))
+                                        appState.seek(to: Double(ratio) * duration)
+                                    }
+                            )
                         
-                        // B. Filmstrip Track
+                        // B. Amber Clip Track (Reference Style: Warm Golden-Amber Pill with Dividers & Center Label)
                         ZStack(alignment: .leading) {
-                            // Filmstrip Image Background
-                            filmstripBackground(width: trackWidth)
-                                .frame(height: 44)
+                            clipTrackBackground(width: trackWidth, duration: duration)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
+                                        .onChanged { val in
+                                            let ratio = max(0.0, min(1.0, val.location.x / trackWidth))
+                                            appState.seek(to: Double(ratio) * duration)
+                                        }
+                                )
                             
                             // Dimmed Outside Mask (Before In-point)
                             let inX = trackWidth * CGFloat(appState.trimStart / duration)
                             let outX = trackWidth * CGFloat(appState.trimEnd / duration)
                             
-                            Rectangle()
-                                .fill(Color.black.opacity(0.65))
-                                .frame(width: max(0, inX), height: 44)
+                            if inX > 2 {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.black.opacity(0.65))
+                                    .frame(width: max(0, inX), height: 42)
+                                    .allowsHitTesting(false)
+                            }
                             
                             // Dimmed Outside Mask (After Out-point)
-                            Rectangle()
-                                .fill(Color.black.opacity(0.65))
-                                .frame(width: max(0, trackWidth - outX), height: 44)
-                                .offset(x: outX)
+                            if outX < trackWidth - 2 {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.black.opacity(0.65))
+                                    .frame(width: max(0, trackWidth - outX), height: 42)
+                                    .offset(x: outX)
+                                    .allowsHitTesting(false)
+                            }
                             
-                            // Active Slow Motion Segment (Draggable block)
-                            RoundedRectangle(cornerRadius: 3)
-                                .strokeBorder(FCPTheme.accentBlue, lineWidth: 2)
-                                .background(FCPTheme.accentBlue.opacity(0.22))
-                                .frame(width: max(16, outX - inX), height: 44)
-                                .offset(x: inX)
-                                .overlay(
-                                    HStack {
-                                        Text(String(format: "SlowMo %.1fx (%.1f сек)", appState.currentEffectiveSpeed, appState.trimEnd - appState.trimStart))
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .shadow(color: .black, radius: 2)
-                                            .padding(.horizontal, 6)
-                                        Spacer()
-                                    }
-                                    .offset(x: inX)
+                            // Highlighted Slow Motion Segment Border
+                            let segAccent = (appState.uiTheme == .liquidGlass) ? FCPTheme.liquidCyan : Color.white
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [segAccent.opacity(0.95), segAccent.opacity(0.5)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 2
                                 )
+                                .frame(width: max(16, outX - inX), height: 42)
+                                .offset(x: inX)
+                                .contentShape(Rectangle())
                                 .gesture(
-                                    DragGesture()
+                                    DragGesture(coordinateSpace: .named("timelineSpace"))
                                         .onChanged { val in
                                             let segDuration = appState.trimEnd - appState.trimStart
                                             let deltaSec = Double(val.translation.width / trackWidth) * duration
-                                            let newStart = max(0.0, min(duration - segDuration, appState.trimStart + deltaSec))
-                                            appState.trimStart = newStart
-                                            appState.trimEnd = newStart + segDuration
+                                            if dragSegmentInitialStart == nil {
+                                                dragSegmentInitialStart = appState.trimStart
+                                            }
+                                            if let initStart = dragSegmentInitialStart {
+                                                let newStart = max(0.0, min(duration - segDuration, initStart + deltaSec))
+                                                appState.trimStart = newStart
+                                                appState.trimEnd = newStart + segDuration
+                                            }
+                                        }
+                                        .onEnded { _ in
+                                            dragSegmentInitialStart = nil
                                         }
                                 )
                             
                             // In-Point Handle (Left)
                             inHandleView
-                                .offset(x: inX - 6)
+                                .offset(x: inX - 11)
                                 .gesture(
-                                    DragGesture()
+                                    DragGesture(coordinateSpace: .named("timelineSpace"))
                                         .onChanged { val in
-                                            let newRatio = max(0.0, min(CGFloat((appState.trimEnd - 0.05) / duration), val.location.x / trackWidth))
-                                            appState.trimStart = Double(newRatio) * duration
-                                            appState.seek(to: appState.trimStart)
+                                            let targetSec = Double(max(0.0, min(trackWidth, val.location.x)) / trackWidth) * duration
+                                            let clamped = max(0.0, min(appState.trimEnd - 0.05, targetSec))
+                                            appState.trimStart = clamped
+                                            appState.seek(to: clamped)
                                         }
                                 )
                             
                             // Out-Point Handle (Right)
                             outHandleView
-                                .offset(x: outX - 6)
+                                .offset(x: outX - 11)
                                 .gesture(
-                                    DragGesture()
+                                    DragGesture(coordinateSpace: .named("timelineSpace"))
                                         .onChanged { val in
-                                            let newRatio = max(CGFloat((appState.trimStart + 0.05) / duration), min(1.0, val.location.x / trackWidth))
-                                            appState.trimEnd = Double(newRatio) * duration
-                                            appState.seek(to: appState.trimEnd)
+                                            let targetSec = Double(max(0.0, min(trackWidth, val.location.x)) / trackWidth) * duration
+                                            let clamped = max(appState.trimStart + 0.05, min(duration, targetSec))
+                                            appState.trimEnd = clamped
+                                            appState.seek(to: clamped)
                                         }
                                 )
                         }
-                        .frame(width: trackWidth, height: 44)
-                        .cornerRadius(4)
+                        .frame(width: trackWidth, height: 42)
                     }
                     
-                    // C. Red Playhead Needle across Ruler and Filmstrip
+                    // C. Playhead Needle (Modern circular pin & precision line)
                     let playheadX = trackWidth * CGFloat(min(1.0, max(0.0, appState.currentTime / duration)))
                     playheadNeedle
-                        .offset(x: playheadX - 6)
+                        .offset(x: playheadX - 10)
                         .gesture(
-                            DragGesture(minimumDistance: 0)
+                            DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineSpace"))
                                 .onChanged { val in
-                                    let ratio = max(0.0, min(1.0, val.location.x / trackWidth))
-                                    appState.seek(to: Double(ratio) * duration)
+                                    let targetSec = Double(max(0.0, min(trackWidth, val.location.x)) / trackWidth) * duration
+                                    appState.seek(to: targetSec)
                                 }
                         )
                 }
                 .frame(width: trackWidth, height: 62)
-                .contentShape(Rectangle())
-                .onTapGesture { location in
-                    let ratio = max(0.0, min(1.0, location.x / trackWidth))
-                    appState.seek(to: Double(ratio) * duration)
-                }
+                .coordinateSpace(name: "timelineSpace")
             }
         }
         .frame(height: 64)
@@ -408,31 +414,56 @@ public struct PrecisionTimelineView: View {
         return String(format: "%02d:%02d", mins, s)
     }
     
-    // MARK: - Filmstrip Background View
-    private func filmstripBackground(width: CGFloat) -> some View {
-        HStack(spacing: 1) {
-            if appState.filmstripImages.isEmpty {
-                ForEach(0..<12, id: \.self) { _ in
+    // MARK: - Reference Clip Track View (Warm Golden-Amber Pill with subtle dividers & center label)
+    private func clipTrackBackground(width: CGFloat, duration: Double) -> some View {
+        ZStack {
+            // Warm golden-amber gradient matching reference image
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.85, green: 0.52, blue: 0.05),
+                            Color(red: 0.68, green: 0.38, blue: 0.02)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+            
+            // Subtle vertical tick dividers across the clip
+            HStack(spacing: 0) {
+                ForEach(0..<10, id: \.self) { _ in
+                    Spacer()
                     Rectangle()
-                        .fill(FCPTheme.cardBackground)
-                        .overlay(
-                            Image(systemName: "film")
-                                .font(.system(size: 10))
-                                .foregroundColor(FCPTheme.textMuted.opacity(0.4))
-                        )
+                        .fill(Color.black.opacity(0.12))
+                        .frame(width: 1, height: 36)
                 }
-            } else {
-                ForEach(appState.filmstripImages.indices, id: \.self) { idx in
-                    Image(nsImage: appState.filmstripImages[idx])
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
+                Spacer()
+            }
+            
+            // Centered clip text: "Clip" and "\(duration)s ⎈ 1x"
+            VStack(spacing: 2) {
+                Text("Clip")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Color.white.opacity(0.92))
+                
+                HStack(spacing: 4) {
+                    Text(String(format: "%.0fs", duration))
+                        .font(.system(size: 9, weight: .medium))
+                    Image(systemName: "gauge.with.dots.needle.bottom.50percent")
+                        .font(.system(size: 8))
+                    Text(String(format: "%.0fx", appState.currentEffectiveSpeed))
+                        .font(.system(size: 9, weight: .semibold))
                 }
+                .foregroundColor(Color.white.opacity(0.85))
             }
         }
-        .frame(width: width)
-        .background(Color.black)
+        .frame(width: width, height: 42)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
     
     // MARK: - In & Out Handles
@@ -440,67 +471,78 @@ public struct PrecisionTimelineView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 3)
                 .fill(Color.white)
-                .frame(width: 12, height: 44)
+                .frame(width: 12, height: 42)
                 .shadow(color: .black.opacity(0.5), radius: 2)
             
             Image(systemName: "chevron.compact.right")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundColor(.black)
         }
+        .frame(width: 22, height: 42)
+        .contentShape(Rectangle())
     }
     
     private var outHandleView: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 3)
                 .fill(Color.white)
-                .frame(width: 12, height: 44)
+                .frame(width: 12, height: 42)
                 .shadow(color: .black.opacity(0.5), radius: 2)
             
             Image(systemName: "chevron.compact.left")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundColor(.black)
         }
+        .frame(width: 22, height: 42)
+        .contentShape(Rectangle())
     }
     
-    // MARK: - Playhead Needle
+    // MARK: - Playhead Needle (Modern circular pin matching reference)
     private var playheadNeedle: some View {
-        VStack(spacing: 0) {
-            Image(systemName: "arrowtriangle.down.fill")
-                .font(.system(size: 11))
-                .foregroundColor(FCPTheme.alertRed)
+        let needleColor = (appState.uiTheme == .liquidGlass) ? FCPTheme.liquidCyan : Color(red: 0.45, green: 0.42, blue: 1.0)
+        return VStack(spacing: 0) {
+            Circle()
+                .fill(needleColor)
+                .frame(width: 12, height: 12)
+                .shadow(color: needleColor.opacity(0.8), radius: 3)
+                .frame(width: 20, height: 18)
+                .contentShape(Rectangle())
             
             Rectangle()
-                .fill(FCPTheme.alertRed)
-                .frame(width: 1.5, height: 50)
+                .fill(needleColor)
+                .frame(width: 2, height: 44)
+                .shadow(color: needleColor.opacity(0.4), radius: 2)
+                .allowsHitTesting(false)
         }
-        .frame(width: 12)
+        .frame(width: 20)
     }
     
     // MARK: - 3. Bottom Settings Row
     private var bottomSettingsRow: some View {
         HStack(spacing: 16) {
-            // Motion Blur Slider
+            // Motion Blur Checkbox & Slider
             HStack(spacing: 8) {
-                Text("Motion Blur:")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(FCPTheme.textSecondary)
+                Toggle(isOn: $appState.isMotionBlurEnabled) {
+                    Text("Motion Blur:")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(FCPTheme.textSecondary)
+                }
+                .toggleStyle(.checkbox)
                 
-                Text("Off")
-                    .font(.system(size: 10))
-                    .foregroundColor(FCPTheme.textMuted)
-                
-                Slider(value: $appState.motionBlur, in: 0.0...1.0)
-                    .accentColor(FCPTheme.accentBlue)
-                    .frame(width: 110)
-                
-                Text("High")
-                    .font(.system(size: 10))
-                    .foregroundColor(FCPTheme.textMuted)
-                
-                Text(appState.motionBlur < 0.05 ? "Выкл" : String(format: "%.0f%%", appState.motionBlur * 100))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(FCPTheme.textPrimary)
-                    .frame(width: 36, alignment: .trailing)
+                if appState.isMotionBlurEnabled {
+                    Slider(value: $appState.motionBlur, in: 0.0...1.0)
+                        .accentColor(FCPTheme.accent(for: appState.uiTheme))
+                        .frame(width: 90)
+                    
+                    Text(String(format: "%.0f%%", appState.motionBlur * 100))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(FCPTheme.textPrimary)
+                        .frame(width: 32, alignment: .trailing)
+                } else {
+                    Text("Выкл")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(FCPTheme.textMuted)
+                }
             }
             
             Spacer()
@@ -520,15 +562,17 @@ public struct PrecisionTimelineView: View {
 public struct PrecisionTimecodeField: View {
     let label: String
     let seconds: Double
+    var theme: AppUITheme = .classic
     let onCommit: (Double) -> Void
     let onStep: (Double) -> Void
     
     @State private var text: String = ""
     @FocusState private var isFocused: Bool
     
-    public init(label: String, seconds: Double, onCommit: @escaping (Double) -> Void, onStep: @escaping (Double) -> Void) {
+    public init(label: String, seconds: Double, theme: AppUITheme = .classic, onCommit: @escaping (Double) -> Void, onStep: @escaping (Double) -> Void) {
         self.label = label
         self.seconds = seconds
+        self.theme = theme
         self.onCommit = onCommit
         self.onStep = onStep
     }
@@ -564,18 +608,22 @@ public struct PrecisionTimecodeField: View {
                     }
                 }
             
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 Button(action: { onStep(0.1) }) {
                     Image(systemName: "chevron.up")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: 8, weight: .bold))
                         .foregroundColor(FCPTheme.textSecondary)
+                        .frame(width: 16, height: 11)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 
                 Button(action: { onStep(-0.1) }) {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
+                        .font(.system(size: 8, weight: .bold))
                         .foregroundColor(FCPTheme.textSecondary)
+                        .frame(width: 16, height: 11)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -583,12 +631,7 @@ public struct PrecisionTimecodeField: View {
         .padding(.horizontal, 6)
         .frame(height: 26)
         .fixedSize(horizontal: true, vertical: true)
-        .background(FCPTheme.panelBackground)
-        .cornerRadius(4)
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(isFocused ? FCPTheme.accentBlue : FCPTheme.border, lineWidth: 1)
-        )
+        .themedCard(theme: theme, cornerRadius: 4, isHighlighted: isFocused)
     }
     
     private func commitInput() {

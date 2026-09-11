@@ -2,6 +2,13 @@ import Foundation
 import SwiftUI
 import AppKit
 
+public enum AppUITheme: String, CaseIterable, Identifiable {
+    case classic = "Классика"
+    case liquidGlass = "Liquid Glass"
+    
+    public var id: String { rawValue }
+}
+
 public enum NavTab: String, CaseIterable, Identifiable {
     case home = "Главная"
     case settings = "Настройки"
@@ -32,7 +39,7 @@ public enum SlowdownPreset: String, CaseIterable, Identifiable {
     case x2 = "2x"
     case x4 = "4x"
     case x8 = "8x"
-    case custom = "Кастомный"
+    case custom = "user"
     
     public var id: String { rawValue }
     
@@ -57,7 +64,6 @@ public enum TargetFPS: Int, CaseIterable, Identifiable {
 public enum PreviewMode: String, CaseIterable, Identifiable {
     case original = "Оригинал"
     case processed = "Замедленное"
-    case sideBySide = "До / После"
     
     public var id: String { rawValue }
 }
@@ -84,6 +90,87 @@ public enum MemoryLimitOption: String, CaseIterable, Identifiable {
         case .mb300: return 300
         case .mb500: return 500
         case .auto:  return 300
+        }
+    }
+}
+
+public enum SlowmoEngine: String, CaseIterable, Identifiable {
+    case fast = "Frame Blend"
+    case quality = "RIFE v4.6"
+    case maximum = "FILM"
+    case flavr = "FLAVR"
+    case amtG = "AMT-G"
+    case emaVfi = "EMA-VFI"
+    
+    public var id: String { rawValue }
+    
+    public var badge: String? {
+        switch self {
+        case .flavr:
+            return "требует 4 кадра, вместо 2-х"
+        case .emaVfi:
+            return "Metal MPS"
+        case .amtG:
+            return "All-Pairs 4K"
+        default:
+            return nil
+        }
+    }
+    
+    public var infoDescription: String {
+        switch self {
+        case .fast:
+            return "Аппаратное кадровое смешивание (Frame Blending). 100% стабильная картинка без артефактов ИИ. Идеально для видео 60-120 FPS и мгновенного экспорта."
+        case .quality:
+            return "Нейросеть RIFE v4.6 на Apple Neural Engine. Двунаправленный оптический поток высокой точности для людей, спорта и плавных движений."
+        case .maximum:
+            return "Глубокая нейросеть FILM (Google Research). Высокоточная интерполяция сложных и резких движений с устранением желейных артефактов."
+        case .flavr:
+            return "Нейросеть FLAVR (Flow-Agnostic Video Representation). 3D пространственно-временные свертки. Отлично справляется со сложными текстурами, водой и дымом. Требует 4 опорных кадра."
+        case .amtG:
+            return "Нейросеть AMT-G (All-Pairs Multi-Field Transforms). Многомасштабное сопоставление всех пар признаков. Идеально для вращений, сложных нелинейных траекторий и деформаций."
+        case .emaVfi:
+            return "Нейросеть EMA-VFI с аппаратной оптимизацией под Metal Performance Shaders на Apple Silicon. Раздельное извлечение векторов движения и сохранение четкости микротекстур без размытия."
+        }
+    }
+}
+
+public enum ExportResolution: String, CaseIterable, Identifiable {
+    case original = "Оригинал"
+    case res4K    = "4K UHD (3840x2160)"
+    case res1080p = "1080p (1920x1080)"
+    case res720p  = "720p (1280x720)"
+    
+    public var id: String { rawValue }
+    
+    public func targetSize(for sourceSize: CGSize) -> CGSize {
+        switch self {
+        case .original:
+            return sourceSize
+        case .res4K:
+            return computeFit(targetW: 3840, targetH: 2160, source: sourceSize)
+        case .res1080p:
+            return computeFit(targetW: 1920, targetH: 1080, source: sourceSize)
+        case .res720p:
+            return computeFit(targetW: 1280, targetH: 720, source: sourceSize)
+        }
+    }
+    
+    private func computeFit(targetW: CGFloat, targetH: CGFloat, source: CGSize) -> CGSize {
+        guard source.width > 0 && source.height > 0 else { return CGSize(width: targetW, height: targetH) }
+        let aspect = source.width / source.height
+        if aspect >= 1.0 {
+            let w = targetW
+            let h = (targetW / aspect).rounded()
+            let evenW = CGFloat(Int(w) + (Int(w) % 2))
+            let evenH = CGFloat(Int(h) + (Int(h) % 2))
+            return CGSize(width: evenW, height: evenH)
+        } else {
+            let h = targetW
+            let w = (targetW * aspect).rounded()
+            let evenW = CGFloat(Int(w) + (Int(w) % 2))
+            let evenH = CGFloat(Int(h) + (Int(h) % 2))
+            return CGSize(width: evenW, height: evenH)
         }
     }
 }

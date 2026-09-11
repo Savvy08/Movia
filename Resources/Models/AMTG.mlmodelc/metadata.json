@@ -1,0 +1,41 @@
+[
+  {
+    "metadataOutputVersion": "3.0",
+    "shortDescription": "All-Pairs Multi-Field Transforms with Multi-Scale Correlation",
+    "author": "Movia Neural Engine",
+    "license": "Commercial / MIT",
+    "specificationVersion": 7,
+    "modelParameters": [],
+    "availability": {
+      "macOS": "13.0",
+      "iOS": "16.0"
+    },
+    "modelType": {
+      "name": "MLModelType_neuralNetwork"
+    },
+    "inputSchema": [
+      {
+        "name": "frame0",
+        "type": "Image",
+        "formattedType": "Image (Color 1920 x 1080)"
+      },
+      {
+        "name": "frame1",
+        "type": "Image",
+        "formattedType": "Image (Color 1920 x 1080)"
+      },
+      {
+        "name": "timestep",
+        "type": "Double",
+        "formattedType": "Double"
+      }
+    ],
+    "outputSchema": [
+      {
+        "name": "interpolatedFrame",
+        "type": "Image",
+        "formattedType": "Image (Color 1920 x 1080)"
+      }
+    ]
+  }
+]

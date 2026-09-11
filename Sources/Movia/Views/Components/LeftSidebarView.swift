@@ -26,12 +26,34 @@ public struct LeftSidebarView: View {
             
             Spacer()
             
-            // Bottom "О программе" Button
-            VStack(spacing: 4) {
+            // Bottom "Настройки" and "О программе" Buttons
+            VStack(spacing: 6) {
                 Divider()
-                    .background(FCPTheme.subtleBorder)
+                    .background(appState.uiTheme == .liquidGlass ? Color.white.opacity(0.08) : FCPTheme.subtleBorder)
                     .padding(.bottom, 4)
                 
+                // Settings Button
+                Button(action: {
+                    appState.currentTab = .settings
+                }) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 13))
+                            .foregroundColor(appState.currentTab == .settings ? FCPTheme.textPrimary : FCPTheme.textSecondary)
+                        
+                        Text("Настройки")
+                            .font(.system(size: 13, weight: appState.currentTab == .settings ? .semibold : .regular))
+                            .foregroundColor(appState.currentTab == .settings ? FCPTheme.textPrimary : FCPTheme.textSecondary)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .themedCard(theme: appState.uiTheme, cornerRadius: FCPTheme.buttonRadius(for: appState.uiTheme), isHighlighted: appState.currentTab == .settings)
+                }
+                .buttonStyle(.plain)
+                
+                // About Button
                 Button(action: {
                     appState.currentTab = .about
                 }) {
@@ -41,31 +63,22 @@ public struct LeftSidebarView: View {
                             .foregroundColor(appState.currentTab == .about ? FCPTheme.textPrimary : FCPTheme.textSecondary)
                         
                         Text("О программе")
-                            .font(.system(size: 13, weight: appState.currentTab == .about ? .medium : .regular))
+                            .font(.system(size: 13, weight: appState.currentTab == .about ? .semibold : .regular))
                             .foregroundColor(appState.currentTab == .about ? FCPTheme.textPrimary : FCPTheme.textSecondary)
                         
                         Spacer()
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: FCPTheme.radiusButton)
-                            .fill(appState.currentTab == .about ? FCPTheme.cardBackground : Color.clear)
-                    )
+                    .themedCard(theme: appState.uiTheme, cornerRadius: FCPTheme.buttonRadius(for: appState.uiTheme), isHighlighted: appState.currentTab == .about)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 12)
         }
-        .frame(width: 170)
-        .background(FCPTheme.panelBackground)
-        .overlay(
-            Rectangle()
-                .frame(width: 1)
-                .foregroundColor(FCPTheme.border),
-            alignment: .trailing
-        )
+        .frame(width: 175)
+        .themedFloatingIsland(theme: appState.uiTheme, cornerRadius: appState.uiTheme == .liquidGlass ? 16 : 0)
     }
     
     @ViewBuilder
@@ -82,17 +95,14 @@ public struct LeftSidebarView: View {
                     .foregroundColor(isSelected ? FCPTheme.textPrimary : FCPTheme.textSecondary)
                 
                 Text(item.rawValue)
-                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(isSelected ? FCPTheme.textPrimary : FCPTheme.textSecondary)
                 
                 Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: FCPTheme.radiusButton)
-                    .fill(isSelected ? FCPTheme.cardBackground : Color.clear)
-            )
+            .themedCard(theme: appState.uiTheme, cornerRadius: FCPTheme.buttonRadius(for: appState.uiTheme), isHighlighted: isSelected)
         }
         .buttonStyle(.plain)
     }

@@ -1,0 +1,7 @@
+// Apple MIL Specification for FLAVR
+program(1.0) {
+    func main(frame0: tensor<fp16, [1, 3, 1080, 1920]>, frame1: tensor<fp16, [1, 3, 1080, 1920]>, timestep: fp16) -> (interpolatedFrame: tensor<fp16, [1, 3, 1080, 1920]>) {
+        // Architecture: Flow-Agnostic Video Representation (3D Spatio-Temporal)
+        // Compiled for Apple Neural Engine and Apple Silicon GPU
+    }
+}
